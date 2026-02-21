@@ -9,10 +9,10 @@ class Game {
     this._W       = canvas.width;
     this._H       = canvas.height;
 
-    // Core systems
+    // Core systems (order matters: hunger needs stats, training needs both)
     this.stats    = new StatsSystem();
-    this.hunger   = new HungerSystem();
-    this.training = new TrainingSystem(this.stats);
+    this.hunger   = new HungerSystem(this.stats);
+    this.training = new TrainingSystem(this.stats, this.hunger);
     this.combat   = new CombatSystem();
     this.world    = new WorldSystem();
     this.story    = new StorySystem();
@@ -20,7 +20,7 @@ class Game {
     this.renderer = new Renderer(canvas);
 
     // Entities
-    this.player   = new Player(this.stats);
+    this.player   = new Player(this.stats, this.hunger);
 
     // Inventory: { itemId: { id, qty } }
     this.inventory = {};
@@ -246,14 +246,15 @@ class Game {
       const rawDt = Math.min((now - this._lastTime) / 1000, 0.05); // cap at 50ms
       this._lastTime = now;
 
-      Input.update(rawDt);
-
       const state = this.currentState;
       if (state) {
         state.update(rawDt);
         state.render(this._ctx, this._W, this._H, rawDt);
       }
 
+      // Update input AFTER state reads it so _justPressed is available
+      // for the full frame before being cleared
+      Input.update(rawDt);
       Effects.update && Effects.update(rawDt);
 
       this._loop();
