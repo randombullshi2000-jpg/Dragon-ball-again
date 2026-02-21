@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Dragon Ball: Path of the Young Warrior</title>
+  <style>
+    :root{--safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px);--safe-right:env(safe-area-inset-right,0px);}
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
+    html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;overscroll-behavior:none;}
+    #game-wrapper{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:#0a0a0a;}
+    #game-canvas{display:block;max-width:100%;max-height:100%;width:auto;height:auto;aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;}
+
+    /* ── Virtual Controls ── */
+    #controls-overlay{position:fixed;inset:0;pointer-events:none;z-index:10;display:none;}
+    #joystick-zone{position:absolute;left:0;bottom:0;width:44%;height:52%;pointer-events:auto;}
+    #joystick-base{position:absolute;left:20px;bottom:max(28px,var(--safe-bottom));width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.07);border:2px solid rgba(255,255,255,0.18);}
+    #joystick-nub{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.28);border:2px solid rgba(255,255,255,0.48);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:none;}
+    #action-zone{position:absolute;right:0;bottom:0;width:44%;height:52%;pointer-events:auto;}
+    .btn{position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,0.30);display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:10px;font-weight:bold;font-family:monospace;color:rgba(255,255,255,0.85);text-shadow:0 1px 2px #000;pointer-events:auto;cursor:pointer;transition:transform 0.06s,background 0.06s;line-height:1.1;}
+    .btn.pressed,.btn:active{transform:scale(0.88)!important;}
+    #btn-a{width:58px;height:58px;right:68px;bottom:max(22px,var(--safe-bottom));background:rgba(0,180,80,0.30);border-color:#00cc55;color:#00ff66;}
+    #btn-b{width:58px;height:58px;right:12px;bottom:max(78px,calc(var(--safe-bottom)+56px));background:rgba(220,40,40,0.30);border-color:#cc2222;color:#ff4444;}
+    #btn-x{width:58px;height:58px;right:124px;bottom:max(78px,calc(var(--safe-bottom)+56px));background:rgba(40,80,220,0.30);border-color:#2255cc;color:#4488ff;}
+    #btn-y{width:58px;height:58px;right:68px;bottom:max(134px,calc(var(--safe-bottom)+112px));background:rgba(200,160,0,0.30);border-color:#ccaa00;color:#ffdd00;}
+    #btn-l{width:72px;height:34px;border-radius:10px;left:8px;top:max(8px,var(--safe-top));background:rgba(255,255,255,0.10);font-size:11px;position:absolute;pointer-events:auto;}
+    #btn-r{width:72px;height:34px;border-radius:10px;right:8px;top:max(8px,var(--safe-top));background:rgba(255,255,255,0.10);font-size:11px;position:absolute;pointer-events:auto;}
+    #btn-ki{position:absolute;width:50px;height:50px;left:50%;bottom:max(36px,calc(var(--safe-bottom)+14px));transform:translateX(-50%);background:rgba(77,184,255,0.22);border-color:#4db8ff;color:#88ccff;font-size:10px;pointer-events:auto;border:2px solid;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:bold;font-family:monospace;}
+    #btn-sprint{width:62px;height:30px;border-radius:8px;left:20px;bottom:max(145px,calc(var(--safe-bottom)+123px));background:rgba(255,180,0,0.14);border:2px solid rgba(255,180,0,0.35);color:rgba(255,200,0,0.80);font-size:10px;font-weight:bold;font-family:monospace;position:absolute;pointer-events:auto;display:flex;align-items:center;justify-content:center;}
+    #top-bar{position:absolute;top:0;left:0;right:0;height:max(44px,calc(var(--safe-top)+36px));display:flex;align-items:flex-end;justify-content:space-between;padding:0 8px 4px;pointer-events:none;}
+    #btn-menu,#btn-stats{pointer-events:auto;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:rgba(255,255,255,0.80);font-family:monospace;font-size:11px;padding:5px 10px;cursor:pointer;}
+
+    /* Portrait rotate hint */
+    #rotate-hint{display:none;position:fixed;inset:0;background:#0a0814;z-index:300;flex-direction:column;align-items:center;justify-content:center;color:#f4d03f;font-family:monospace;text-align:center;padding:24px;}
+    #rotate-hint .icon{font-size:60px;margin-bottom:16px;}
+    @media(orientation:portrait){#rotate-hint{display:flex;}}
+
+    /* Loading */
+    #loading-screen{position:fixed;inset:0;background:#0a0814;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:200;color:#f4d03f;padding:24px;}
+    #loading-title{font-family:monospace;font-size:clamp(16px,5vw,26px);letter-spacing:4px;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 20px #f4d03f;}
+    #loading-sub{font-family:monospace;font-size:clamp(8px,2vw,12px);color:#aaa;letter-spacing:3px;margin-bottom:22px;}
+    #loading-bar-container{width:min(280px,75vw);height:8px;background:#1a1a2e;border:1px solid #f4d03f;border-radius:4px;overflow:hidden;}
+    #loading-bar{height:100%;background:linear-gradient(90deg,#c8900a,#f4d03f);width:0%;transition:width 0.12s;}
+    #loading-text{margin-top:8px;font-family:monospace;font-size:10px;color:#888;letter-spacing:2px;}
+  </style>
+</head>
+<body>
+  <div id="rotate-hint">
+    <div class="icon">📱</div>
+    <p>ROTATE TO LANDSCAPE</p>
+    <p style="font-size:11px;color:#888;margin-top:8px;">This game requires landscape mode</p>
+  </div>
+
+  <div id="game-wrapper">
+    <canvas id="game-canvas" width="960" height="540"></canvas>
+  </div>
+
+  <!-- Virtual controls overlay -->
+  <div id="controls-overlay">
+    <div style="position:absolute;top:0;left:0;right:0;pointer-events:none;">
+      <button class="btn" id="btn-l">🛡<br>BLK</button>
+      <button class="btn" id="btn-r">⚡<br>DGE</button>
+    </div>
+    <div id="joystick-zone">
+      <div id="joystick-base"><div id="joystick-nub"></div></div>
+      <div id="btn-sprint">🏃 RUN</div>
+    </div>
+    <div id="btn-ki">KI<br>⚡</div>
+    <div id="action-zone">
+      <button class="btn" id="btn-x">💢<br>MED</button>
+      <button class="btn" id="btn-y">💥<br>HVY</button>
+      <button class="btn" id="btn-a">👊<br>ATK</button>
+      <button class="btn" id="btn-b">↩<br>BCK</button>
+    </div>
+    <div id="top-bar">
+      <button id="btn-menu">☰ MENU</button>
+      <button id="btn-stats">📊 STATS</button>
+    </div>
+  </div>
+
+  <!-- Loading screen -->
+  <div id="loading-screen">
+    <div id="loading-title">Dragon Ball</div>
+    <div id="loading-sub">PATH OF THE YOUNG WARRIOR</div>
+    <div id="loading-bar-container"><div id="loading-bar"></div></div>
+    <div id="loading-text">Initializing...</div>
+  </div>
+
+  <!-- Core utilities (load order matters) -->
+  <script src="src/utils/math.js"></script>
+  <script src="src/utils/color.js"></script>
+  <script src="src/utils/random.js"></script>
+  <script src="src/constants.js"></script>
+
+  <!-- Game data -->
+  <script src="src/data/sprites.js"></script>
+  <script src="src/data/training-data.js"></script>
+  <script src="src/data/enemy-data.js"></script>
+  <script src="src/data/story-data.js"></script>
+  <script src="src/data/items-data.js"></script>
+
+  <!-- Core systems -->
+  <script src="src/input.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/systems/stats.js"></script>
+  <script src="src/systems/hunger.js"></script>
+  <script src="src/systems/training.js"></script>
+  <script src="src/systems/combat.js"></script>
+  <script src="src/systems/world.js"></script>
+  <script src="src/systems/story.js"></script>
+  <script src="src/systems/weather.js"></script>
+
+  <!-- Entities -->
+  <script src="src/entities/projectile.js"></script>
+  <script src="src/entities/npc.js"></script>
+  <script src="src/entities/enemy.js"></script>
+  <script src="src/entities/player.js"></script>
+
+  <!-- Rendering -->
+  <script src="src/rendering/particles.js"></script>
+  <script src="src/rendering/effects.js"></script>
+  <script src="src/rendering/hud.js"></script>
+  <script src="src/rendering/renderer.js"></script>
+
+  <!-- Game states -->
+  <script src="src/states/title-state.js"></script>
+  <script src="src/states/dialogue-state.js"></script>
+  <script src="src/states/overworld-state.js"></script>
+  <script src="src/states/training-state.js"></script>
+  <script src="src/states/combat-state.js"></script>
+  <script src="src/states/inventory-state.js"></script>
+
+  <!-- Main game -->
+  <script src="src/game.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
